@@ -1,0 +1,19 @@
+# Binaries
+tor-bridge-collector
+tor-bridge-collector-*
+*.exe
+
+# Data
+data/
+output/
+logs/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

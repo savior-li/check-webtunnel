@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tor Bridge Collector</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        header { background: #2c3e50; color: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; }
+        header h1 { font-size: 1.5rem; }
+        .nav { display: flex; gap: 15px; margin-top: 15px; }
+        .nav a { color: white; text-decoration: none; padding: 8px 16px; background: #34495e; border-radius: 4px; }
+        .nav a:hover, .nav a.active { background: #3498db; }
+        .card { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .stat-card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }
+        .stat-value { font-size: 2rem; font-weight: bold; color: #3498db; }
+        .stat-label { color: #7f8c8d; margin-top: 5px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ecf0f1; }
+        th { background: #34495e; color: white; }
+        tr:hover { background: #f8f9fa; }
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; }
+        .badge-valid { background: #27ae60; color: white; }
+        .badge-invalid { background: #e74c3c; color: white; }
+        .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; }
+        .btn-primary { background: #3498db; color: white; }
+        .btn-primary:hover { background: #2980b9; }
+        .actions { display: flex; gap: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Tor Bridge Collector</h1>
+            <nav class="nav">
+                <a href="/" class="active">Dashboard</a>
+                <a href="/bridges">Bridges</a>
+                <a href="/settings">Settings</a>
+            </nav>
+        </header>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-value" id="total-bridges">-</div>
+                <div class="stat-label">Total Bridges</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="valid-bridges">-</div>
+                <div class="stat-label">Valid Bridges</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="invalid-bridges">-</div>
+                <div class="stat-label">Invalid Bridges</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="avg-latency">-</div>
+                <div class="stat-label">Avg Latency (ms)</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Recent Bridges</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Hash</th>
+                        <th>Transport</th>
+                        <th>Address</th>
+                        <th>Port</th>
+                        <th>Status</th>
+                        <th>Last Seen</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="bridges-table"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        async function loadStats() {
+            try {
+                const resp = await fetch('/api/stats');
+                const data = await resp.json();
+                document.getElementById('total-bridges').textContent = data.total_bridges || 0;
+                document.getElementById('valid-bridges').textContent = data.valid_bridges || 0;
+                document.getElementById('invalid-bridges').textContent = data.invalid_bridges || 0;
+                document.getElementById('avg-latency').textContent = (data.avg_latency || 0).toFixed(2);
+            } catch (e) { console.error('Failed to load stats:', e); }
+        }
+
+        async function loadBridges() {
+            try {
+                const resp = await fetch('/api/bridges?page_size=10');
+                const data = await resp.json();
+                const tbody = document.getElementById('bridges-table');
+                tbody.innerHTML = '';
+                (data.bridges || []).forEach(bridge => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${bridge.hash.substring(0, 12)}...</td>
+                        <td>${bridge.transport}</td>
+                        <td>${bridge.address}</td>
+                        <td>${bridge.port}</td>
+                        <td><span class="badge ${bridge.is_valid ? 'badge-valid' : 'badge-invalid'}">${bridge.is_valid ? 'Valid' : 'Invalid'}</span></td>
+                        <td>${new Date(bridge.last_seen).toLocaleString()}</td>
+                        <td class="actions">
+                            <button class="btn btn-primary" onclick="validateBridge(${bridge.id})">Validate</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (e) { console.error('Failed to load bridges:', e); }
+        }
+
+        async function validateBridge(id) {
+            try {
+                await fetch(`/api/bridges/${id}/validate`, { method: 'POST' });
+                loadStats();
+                loadBridges();
+            } catch (e) { console.error('Failed to validate:', e); }
+        }
+
+        loadStats();
+        loadBridges();
+        setInterval(loadStats, 30000);
+    </script>
+</body>
+</html>

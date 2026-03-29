@@ -1,0 +1,32 @@
+app:
+  language: "en"
+  db_path: "./data/bridges.db"
+  log_level: "info"
+  log_file: "./logs/app.log"
+
+server:
+  host: "0.0.0.0"
+  port: 8080
+
+proxy:
+  enabled: false
+  type: "http"
+  address: ""
+  port: 0
+  username: ""
+  password: ""
+
+fetch:
+  url: "https://bridges.torproject.org/bridges?transport=webtunnel"
+  interval: 3600
+  timeout: 30
+
+validation:
+  timeout: 10
+  concurrency: 5
+  retry: 2
+
+export:
+  torrc_path: "./output/bridges.txt"
+  json_path: "./output/bridges.json"
+  csv_path: "./output/bridges.csv"
