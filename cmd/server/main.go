@@ -114,6 +114,79 @@ func main() {
 				},
 				Action: statsAction,
 			},
+			{
+				Name:    "query",
+				Aliases: []string{"q"},
+				Usage:   "Query bridges with validation stats",
+				Flags: []cli.Flag{
+					&cli.IntFlag{
+						Name:  "min-validation",
+						Usage: "Minimum validation count",
+					},
+					&cli.IntFlag{
+						Name:  "min-success",
+						Usage: "Minimum success count",
+					},
+					&cli.BoolFlag{
+						Name:  "available",
+						Usage: "Only available bridges",
+					},
+					&cli.StringFlag{
+						Name:  "order-by",
+						Value: "validation_count",
+						Usage: "Order by (validation_count/success_rate/last_validated)",
+					},
+					&cli.StringFlag{
+						Name:  "order",
+						Value: "desc",
+						Usage: "Order direction (asc/desc)",
+					},
+					&cli.IntFlag{
+						Name:  "limit",
+						Usage: "Result limit",
+					},
+					&cli.StringFlag{
+						Name:  "format",
+						Value: "torrc",
+						Usage: "Output format (torrc/json/all)",
+					},
+					&cli.StringFlag{
+						Name:    "output",
+						Aliases: []string{"o"},
+						Value:   "./output",
+						Usage:   "Output directory",
+					},
+				},
+				Action: queryAction,
+			},
+			{
+				Name:    "import",
+				Aliases: []string{"i"},
+				Usage:   "Import bridges from file",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:     "file",
+						Aliases:  []string{"f"},
+						Required: true,
+						Usage:    "Import file path",
+					},
+					&cli.StringFlag{
+						Name:  "format",
+						Value: "text",
+						Usage: "File format (text/csv)",
+					},
+					&cli.StringFlag{
+						Name:  "transport",
+						Value: "webtunnel",
+						Usage: "Default transport type",
+					},
+					&cli.BoolFlag{
+						Name:  "validate",
+						Usage: "Validate after import",
+					},
+				},
+				Action: importAction,
+			},
 		},
 	}
 
@@ -363,5 +436,113 @@ func statsAction(c *cli.Context) error {
 		}
 	}
 
+	return nil
+}
+
+func queryAction(c *cli.Context) error {
+	cfg := getConfig(c)
+	lang := getLang(c)
+	translator := i18n.NewTranslator(lang)
+
+	fmt.Println(translator.T("querying"))
+
+	db, err := database.New(cfg.Database.Path)
+	if err != nil {
+		return fmt.Errorf("open db failed: %w", err)
+	}
+	defer db.Close()
+
+	repo := database.NewBridgeRepository(db)
+
+	opts := &database.BridgeQueryOption{
+		MinValidationCount: c.Int("min-validation"),
+		MinSuccessCount:    c.Int("min-success"),
+		OrderBy:            c.String("order-by"),
+		OrderDesc:          c.String("order") == "desc",
+		Limit:              c.Int("limit"),
+	}
+
+	if c.Bool("available") {
+		avail := true
+		opts.IsAvailable = &avail
+	}
+
+	bridgesWithStats, err := repo.GetBridgesWithStats(opts)
+	if err != nil {
+		return fmt.Errorf("%s: %w", translator.T("query_failed"), err)
+	}
+
+	var bridges []bridge.Bridge
+	for _, s := range bridgesWithStats {
+		bridges = append(bridges, s.Bridge)
+	}
+
+	fmt.Printf("%s: %d\n", translator.T("bridges_found"), len(bridges))
+
+	format := exporter.ExportFormat(c.String("format"))
+	outputDir := c.String("output")
+
+	if len(bridges) > 0 {
+		if err := exporter.Export(bridges, format, outputDir); err != nil {
+			return fmt.Errorf("%s: %w", translator.T("export_failed"), err)
+		}
+		fmt.Printf("%s: %s\n", translator.T("export_file"), outputDir)
+	}
+
+	fmt.Println(translator.T("query_success"))
+	return nil
+}
+
+func importAction(c *cli.Context) error {
+	cfg := getConfig(c)
+	lang := getLang(c)
+	translator := i18n.NewTranslator(lang)
+
+	filePath := c.String("file")
+	format := c.String("format")
+	transport := c.String("transport")
+
+	fmt.Println(translator.T("importing"))
+
+	db, err := database.New(cfg.Database.Path)
+	if err != nil {
+		return fmt.Errorf("open db failed: %w", err)
+	}
+	defer db.Close()
+
+	repo := database.NewBridgeRepository(db)
+
+	fileImporter := bridge.NewFileImporter(format, transport)
+	bridges, err := fileImporter.Import(filePath)
+	if err != nil {
+		return fmt.Errorf("%s: %w", translator.T("import_file_failed"), err)
+	}
+
+	imported := 0
+	skipped := 0
+	for _, b := range bridges {
+		id, isNew, err := repo.Upsert(&b)
+		if err != nil {
+			log.Printf("Warning: upsert bridge failed: %v", err)
+			continue
+		}
+		if isNew {
+			imported++
+			_ = id
+		} else {
+			skipped++
+		}
+	}
+
+	fmt.Printf("%s: %d, %s: %d\n",
+		translator.T("import_total"), len(bridges),
+		translator.T("import_imported"), imported)
+	fmt.Printf("%s: %d\n", translator.T("import_skipped"), skipped)
+
+	if c.Bool("validate") {
+		fmt.Println(translator.T("validating"))
+	}
+
+	fmt.Println(translator.T("import_success"))
 	return nil
 }

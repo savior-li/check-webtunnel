@@ -3,6 +3,7 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"tor-bridge-collector/pkg/bridge"
@@ -199,4 +200,131 @@ func (r *BridgeRepository) GetAvgResponseTime() (float64, error) {
 		return avg.Float64, nil
 	}
 	return 0, nil
+}
+
+type BridgeWithStats struct {
+	bridge.Bridge
+	ValidationCount int
+	SuccessCount    int
+	SuccessRate     float64
+	LastValidatedAt sql.NullTime
+}
+
+type BridgeQueryOption struct {
+	MinValidationCount int
+	MinSuccessCount    int
+	IsAvailable        *bool
+	OrderBy            string
+	OrderDesc          bool
+	Limit              int
+}
+
+func (r *BridgeRepository) GetBridgesWithStats(opts *BridgeQueryOption) ([]BridgeWithStats, error) {
+	if opts == nil {
+		opts = &BridgeQueryOption{}
+	}
+
+	query := `
+		SELECT 
+			b.id, b.hash, b.transport, b.address, b.port, b.fingerprint,
+			b.discovered_at, b.last_validated, b.is_available, b.response_time_ms,
+			b.created_at, b.updated_at,
+			COUNT(vh.id) AS validation_count,
+			SUM(CASE WHEN vh.is_available = 1 THEN 1 ELSE 0 END) AS success_count,
+			MAX(vh.validated_at) AS last_validated_at
+		FROM bridges b
+		LEFT JOIN validation_history vh ON b.id = vh.bridge_id
+		GROUP BY b.id
+	`
+
+	var conditions []string
+	var args []interface{}
+
+	if opts.MinValidationCount > 0 {
+		conditions = append(conditions, "validation_count >= ?")
+		args = append(args, opts.MinValidationCount)
+	}
+
+	if opts.MinSuccessCount > 0 {
+		conditions = append(conditions, "success_count >= ?")
+		args = append(args, opts.MinSuccessCount)
+	}
+
+	if opts.IsAvailable != nil {
+		avail := 0
+		if *opts.IsAvailable {
+			avail = 1
+		}
+		conditions = append(conditions, "b.is_available = ?")
+		args = append(args, avail)
+	}
+
+	if len(conditions) > 0 {
+		query += " HAVING " + strings.Join(conditions, " AND ")
+	}
+
+	orderBy := "validation_count"
+	switch opts.OrderBy {
+	case "success_rate":
+		orderBy = "CASE WHEN COUNT(vh.id) > 0 THEN CAST(SUM(CASE WHEN vh.is_available = 1 THEN 1 ELSE 0 END) AS FLOAT) / COUNT(vh.id) ELSE 0 END"
+	case "last_validated":
+		orderBy = "MAX(vh.validated_at)"
+	case "validation_count":
+		orderBy = "COUNT(vh.id)"
+	}
+
+	if opts.OrderDesc {
+		query += " ORDER BY " + orderBy + " DESC"
+	} else {
+		query += " ORDER BY " + orderBy + " ASC"
+	}
+
+	if opts.Limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, opts.Limit)
+	}
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query bridges with stats failed: %w", err)
+	}
+	defer rows.Close()
+
+	var results []BridgeWithStats
+	for rows.Next() {
+		var s BridgeWithStats
+		var fingerprint, lastValidated sql.NullString
+		var responseTime sql.NullInt64
+		var validationCount, successCount sql.NullInt64
+
+		err := rows.Scan(
+			&s.ID, &s.Hash, &s.Transport, &s.Address, &s.Port,
+			&fingerprint, &s.DiscoveredAt, &lastValidated, &s.IsAvailable,
+			&responseTime, &s.CreatedAt, &s.UpdatedAt,
+			&validationCount, &successCount, &s.LastValidatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("scan bridge with stats failed: %w", err)
+		}
+
+		if fingerprint.Valid {
+			s.Fingerprint = fingerprint.String
+		}
+		if responseTime.Valid {
+			s.ResponseTime = int(responseTime.Int64)
+		}
+		if validationCount.Valid {
+			s.ValidationCount = int(validationCount.Int64)
+		}
+		if successCount.Valid {
+			s.SuccessCount = int(successCount.Int64)
+		}
+		if validationCount.Valid && validationCount.Int64 > 0 {
+			s.SuccessRate = float64(successCount.Int64) / float64(validationCount.Int64)
+		}
+
+		results = append(results, s)
+	}
+
+	return results, nil
 }

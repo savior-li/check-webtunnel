@@ -42,11 +42,25 @@ var zh = map[string]string{
 	"bridge_unavailable": "不可用",
 	"bridge_unknown":     "未知",
 
+	"query_success": "查询完成",
+	"query_failed":  "查询失败",
+	"querying":      "正在查询桥梁数据...",
+
+	"import_success":     "导入完成",
+	"import_failed":      "导入失败",
+	"import_file_failed": "导入文件失败",
+	"importing":          "正在导入数据...",
+	"import_total":       "文件总数",
+	"import_imported":    "已导入",
+	"import_skipped":     "已跳过(重复)",
+
 	"cmd_init":     "初始化配置文件和数据库",
 	"cmd_fetch":    "采集桥梁数据",
 	"cmd_validate": "验证桥梁可用性",
 	"cmd_export":   "导出桥梁数据",
 	"cmd_stats":    "显示统计信息",
+	"cmd_query":    "按条件查询桥梁",
+	"cmd_import":   "从文件导入桥梁",
 
 	"flag_config":  "配置文件路径",
 	"flag_lang":    "语言 (en/zh)",

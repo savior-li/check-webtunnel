@@ -42,11 +42,25 @@ var en = map[string]string{
 	"bridge_unavailable": "Unavailable",
 	"bridge_unknown":     "Unknown",
 
+	"query_success": "Query completed",
+	"query_failed":  "Query failed",
+	"querying":      "Querying bridges...",
+
+	"import_success":     "Import completed",
+	"import_failed":      "Import failed",
+	"import_file_failed": "Import file failed",
+	"importing":          "Importing data...",
+	"import_total":       "Total in file",
+	"import_imported":    "Imported",
+	"import_skipped":     "Skipped (duplicate)",
+
 	"cmd_init":     "Initialize config and database",
 	"cmd_fetch":    "Fetch bridge data",
 	"cmd_validate": "Validate bridge availability",
 	"cmd_export":   "Export bridge data",
 	"cmd_stats":    "Show statistics",
+	"cmd_query":    "Query bridges with filters",
+	"cmd_import":   "Import bridges from file",
 
 	"flag_config":  "Config file path",
 	"flag_lang":    "Language (en/zh)",
