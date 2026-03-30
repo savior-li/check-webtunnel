@@ -1,7 +1,9 @@
 package configs
 
 import (
+	"fmt"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -38,6 +40,32 @@ type Proxy struct {
 	Type    string `yaml:"type"`
 	Address string `yaml:"address"`
 	Port    int    `yaml:"port"`
+}
+
+func (p *Proxy) UnmarshalYAML(value *yaml.Node) error {
+	var raw string
+	if err := value.Decode(&raw); err != nil {
+		return err
+	}
+
+	if strings.HasPrefix(raw, "socks://") {
+		p.Type = "socks5"
+		raw = strings.TrimPrefix(raw, "socks://")
+	} else if strings.HasPrefix(raw, "http://") {
+		p.Type = "http"
+		raw = strings.TrimPrefix(raw, "http://")
+	} else if strings.HasPrefix(raw, "https://") {
+		p.Type = "https"
+		raw = strings.TrimPrefix(raw, "https://")
+	}
+
+	parts := strings.Split(raw, ":")
+	if len(parts) == 2 {
+		p.Address = parts[0]
+		fmt.Sscanf(parts[1], "%d", &p.Port)
+	}
+
+	return nil
 }
 
 type ExportConfig struct {
