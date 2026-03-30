@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -31,20 +32,24 @@ func (f *Fetcher) SetProxy(proxyURL string) error {
 		return nil
 	}
 
-	transport := &http.Transport{
-		Proxy: http.ProxyURL(nil),
-	}
-
 	proxyURL = strings.TrimPrefix(proxyURL, "http://")
 	proxyURL = strings.TrimPrefix(proxyURL, "https://")
 	proxyURL = strings.TrimPrefix(proxyURL, "socks5://")
+	proxyURL = strings.TrimPrefix(proxyURL, "socks5h://")
+	proxyURL = strings.TrimPrefix(proxyURL, "socks://")
 
 	if !strings.Contains(proxyURL, "://") {
 		proxyURL = "http://" + proxyURL
 	}
 
-	transport.Proxy = nil
-	f.client.Transport = transport
+	proxyURLParsed, err := url.Parse(proxyURL)
+	if err != nil {
+		return err
+	}
+
+	f.client.Transport = &http.Transport{
+		Proxy: http.ProxyURL(proxyURLParsed),
+	}
 
 	return nil
 }

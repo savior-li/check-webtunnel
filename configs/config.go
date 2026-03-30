@@ -48,7 +48,13 @@ func (p *Proxy) UnmarshalYAML(value *yaml.Node) error {
 		return err
 	}
 
-	if strings.HasPrefix(raw, "socks://") {
+	if strings.HasPrefix(raw, "socks5h://") {
+		p.Type = "socks5h"
+		raw = strings.TrimPrefix(raw, "socks5h://")
+	} else if strings.HasPrefix(raw, "socks5://") {
+		p.Type = "socks5"
+		raw = strings.TrimPrefix(raw, "socks5://")
+	} else if strings.HasPrefix(raw, "socks://") {
 		p.Type = "socks5"
 		raw = strings.TrimPrefix(raw, "socks://")
 	} else if strings.HasPrefix(raw, "http://") {

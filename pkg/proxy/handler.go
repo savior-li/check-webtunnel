@@ -10,9 +10,10 @@ import (
 type ProxyType string
 
 const (
-	HTTP   ProxyType = "http"
-	HTTPS  ProxyType = "https"
-	SOCKS5 ProxyType = "socks5"
+	HTTP    ProxyType = "http"
+	HTTPS   ProxyType = "https"
+	SOCKS5  ProxyType = "socks5"
+	SOCKS5H ProxyType = "socks5h"
 )
 
 type Proxy struct {
@@ -33,9 +34,15 @@ func ParseProxy(proxyStr string) (*Proxy, error) {
 
 	var p Proxy
 
-	if strings.HasPrefix(proxyStr, "socks5://") {
+	if strings.HasPrefix(proxyStr, "socks5h://") {
+		p.Type = SOCKS5H
+		proxyStr = strings.TrimPrefix(proxyStr, "socks5h://")
+	} else if strings.HasPrefix(proxyStr, "socks5://") {
 		p.Type = SOCKS5
 		proxyStr = strings.TrimPrefix(proxyStr, "socks5://")
+	} else if strings.HasPrefix(proxyStr, "socks://") {
+		p.Type = SOCKS5
+		proxyStr = strings.TrimPrefix(proxyStr, "socks://")
 	} else if strings.HasPrefix(proxyStr, "https://") {
 		p.Type = HTTPS
 		proxyStr = strings.TrimPrefix(proxyStr, "https://")
