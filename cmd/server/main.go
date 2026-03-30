@@ -161,7 +161,7 @@ func main() {
 			},
 			{
 				Name:    "import",
-				Aliases: []string{"i"},
+				Aliases: []string{"imp"},
 				Usage:   "Import bridges from file",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
