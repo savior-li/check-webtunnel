@@ -32,8 +32,8 @@ type ValidateConfig struct {
 }
 
 type ProxyConfig struct {
-	Enabled bool    `yaml:"enabled"`
-	Proxies []Proxy `yaml:"proxies"`
+	Enabled bool      `yaml:"enabled"`
+	Proxies ProxyList `yaml:"proxies"`
 }
 
 type Proxy struct {
@@ -42,12 +42,26 @@ type Proxy struct {
 	Port    int    `yaml:"port"`
 }
 
-func (p *Proxy) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	var raw string
-	if err := unmarshal(&raw); err != nil {
+type ProxyList []Proxy
+
+func (pl *ProxyList) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var rawList []string
+	if err := unmarshal(&rawList); err != nil {
 		return err
 	}
 
+	for _, raw := range rawList {
+		var p Proxy
+		if err := parseProxyString(raw, &p); err != nil {
+			continue
+		}
+		*pl = append(*pl, p)
+	}
+
+	return nil
+}
+
+func parseProxyString(raw string, p *Proxy) error {
 	if strings.HasPrefix(raw, "socks5h://") {
 		p.Type = "socks5h"
 		raw = strings.TrimPrefix(raw, "socks5h://")
