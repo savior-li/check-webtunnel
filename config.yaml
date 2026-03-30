@@ -1,0 +1,16 @@
+database:
+    path: ./bridges.db
+fetch:
+    url: https://bridges.torproject.org/bridges?transport=webtunnel
+    timeout: 30
+validate:
+    timeout: 10
+    workers: 5
+proxy:
+    enabled: false
+    proxies: []
+export:
+    output_dir: ./output
+app:
+    lang: zh
+    log_level: info
