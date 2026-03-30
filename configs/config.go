@@ -42,9 +42,9 @@ type Proxy struct {
 	Port    int    `yaml:"port"`
 }
 
-func (p *Proxy) UnmarshalYAML(value *yaml.Node) error {
+func (p *Proxy) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var raw string
-	if err := value.Decode(&raw); err != nil {
+	if err := unmarshal(&raw); err != nil {
 		return err
 	}
 
@@ -63,6 +63,8 @@ func (p *Proxy) UnmarshalYAML(value *yaml.Node) error {
 	} else if strings.HasPrefix(raw, "https://") {
 		p.Type = "https"
 		raw = strings.TrimPrefix(raw, "https://")
+	} else {
+		p.Type = "http"
 	}
 
 	parts := strings.Split(raw, ":")
