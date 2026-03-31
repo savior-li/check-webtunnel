@@ -198,6 +198,11 @@ func fetchAction(c *cli.Context) error {
 	proxyStr := c.String("proxy")
 	fetcher := bridge.NewFetcher(cfg.Fetch.URL, time.Duration(cfg.Fetch.Timeout)*time.Second)
 
+	if proxyStr == "" && cfg.Proxy.Enabled && len(cfg.Proxy.Proxies) > 0 {
+		p := cfg.Proxy.Proxies[0]
+		proxyStr = fmt.Sprintf("%s://%s:%d", p.Type, p.Address, p.Port)
+	}
+
 	if proxyStr != "" {
 		if err := fetcher.SetProxy(proxyStr); err != nil {
 			return fmt.Errorf("set proxy failed: %w", err)
