@@ -22,8 +22,8 @@ func TestIntegration_BridgeFetchAndStore(t *testing.T) {
 		html := `
 			<html>
 				<body>
-					Bridge webtunnel 192.168.1.1:443 fingerprint ABCD1234
-					Bridge webtunnel 10.0.0.1:8080 fingerprint EFGH5678
+					webtunnel 192.168.1.1:443 ABCD1234 url=https://test1.com <br/>
+					webtunnel 10.0.0.1:8080 EFGH5678 url=https://test2.com <br/>
 				</body>
 			</html>
 		`

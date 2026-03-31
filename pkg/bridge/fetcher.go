@@ -6,7 +6,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strings"
 	"time"
 
@@ -122,25 +121,65 @@ func (f *Fetcher) Fetch() ([]Bridge, error) {
 func (f *Fetcher) Parse(html string) ([]Bridge, error) {
 	var bridges []Bridge
 
-	bridgeRegex := regexp.MustCompile(`Bridge\s+(webtunnel\s+)?([^\s]+):(\d+)(?:\s+fingerprint\s+([^\s]+))?`)
-	matches := bridgeRegex.FindAllStringSubmatch(html, -1)
+	lines := strings.Split(html, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if !strings.Contains(line, "webtunnel") {
+			continue
+		}
 
-	for _, match := range matches {
-		transport := "webtunnel"
-		address := match[2]
-		port := 0
-		fingerprint := ""
+		parts := strings.Fields(line)
+		if len(parts) < 3 {
+			continue
+		}
 
-		fmt.Sscanf(match[3], "%d", &port)
-		if len(match) > 4 {
-			fingerprint = match[4]
+		// parts[0] = "webtunnel"
+		// parts[1] = "192.168.1.1:443" 或 "[IPv6]:port"
+		// parts[2] = fingerprint
+		// parts[3+] = url=xxx, ver=yyy
+
+		addrPort := parts[1]
+		fingerprint := parts[2]
+
+		var addr string
+		var port int
+
+		if strings.HasPrefix(addrPort, "[") {
+			// IPv6 格式: [addr]:port
+			end := strings.LastIndex(addrPort, "]")
+			if end > 0 {
+				addr = addrPort[1:end]
+				fmt.Sscanf(addrPort[end+2:], "%d", &port)
+			}
+		} else {
+			// IPv4 格式: addr:port
+			lastColon := strings.LastIndex(addrPort, ":")
+			if lastColon > 0 {
+				addr = addrPort[:lastColon]
+				fmt.Sscanf(addrPort[lastColon+1:], "%d", &port)
+			}
+		}
+
+		if addr == "" || port == 0 {
+			continue
+		}
+
+		// 提取 url（如果存在）
+		var extra string
+		for i := 3; i < len(parts); i++ {
+			if strings.HasPrefix(parts[i], "url=") {
+				extra = strings.TrimPrefix(parts[i], "url=")
+				extra = strings.TrimSuffix(extra, "<br/>")
+				break
+			}
 		}
 
 		bridge := &Bridge{
-			Transport:    transport,
-			Address:      address,
+			Transport:    "webtunnel",
+			Address:      addr,
 			Port:         port,
 			Fingerprint:  fingerprint,
+			Extra:        extra,
 			DiscoveredAt: time.Now(),
 			IsAvailable:  -1,
 		}

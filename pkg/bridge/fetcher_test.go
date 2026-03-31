@@ -68,8 +68,8 @@ func TestFetcher_Fetch_Success(t *testing.T) {
 		html := `
 			<html>
 				<body>
-					 Bridge webtunnel 192.168.1.1:443 fingerprint ABCD1234
-					 Bridge webtunnel 10.0.0.1:8080 fingerprint EFGH5678
+					webtunnel 192.168.1.1:443 ABCD1234 url=https://example.com <br/>
+					webtunnel [2001:db8::1]:443 EFGH5678 url=https://test.com <br/>
 				</body>
 			</html>
 		`
@@ -113,9 +113,9 @@ func TestFetcher_Parse(t *testing.T) {
 	html := `
 		<html>
 			<body>
-				Bridge webtunnel 192.168.1.1:443 fingerprint ABCD1234
-				Bridge webtunnel 10.0.0.1:8080 fingerprint EFGH5678
-				Bridge webtunnel 172.16.0.1:9000
+				webtunnel 192.168.1.1:443 ABCD1234 url=https://test1.com <br/>
+				webtunnel 10.0.0.1:8080 EFGH5678 url=https://test2.com <br/>
+				webtunnel [2001:db8::1]:9000 ABCDEF url=https://test3.com <br/>
 			</body>
 		</html>
 	`
@@ -134,9 +134,9 @@ func TestFetcher_Parse(t *testing.T) {
 	assert.Equal(t, "10.0.0.1", bridges[1].Address)
 	assert.Equal(t, 8080, bridges[1].Port)
 
-	assert.Equal(t, "172.16.0.1", bridges[2].Address)
+	assert.Equal(t, "2001:db8::1", bridges[2].Address)
 	assert.Equal(t, 9000, bridges[2].Port)
-	assert.Empty(t, bridges[2].Fingerprint)
+	assert.Equal(t, "ABCDEF", bridges[2].Fingerprint)
 }
 
 func TestFetcher_Parse_Empty(t *testing.T) {
@@ -171,8 +171,8 @@ func TestFetcher_ParseVariations(t *testing.T) {
 		}
 	}{
 		{
-			name: "with transport prefix",
-			html: "Bridge webtunnel 192.168.1.1:443 fingerprint ABCD",
+			name: "IPv4 webtunnel",
+			html: "webtunnel 192.168.1.1:443 ABCD url=https://test.com",
 			expected: []struct {
 				addr string
 				port int
@@ -180,29 +180,29 @@ func TestFetcher_ParseVariations(t *testing.T) {
 			}{{addr: "192.168.1.1", port: 443, fp: "ABCD"}},
 		},
 		{
-			name: "without transport prefix",
-			html: "Bridge 192.168.1.1:443 fingerprint ABCD",
+			name: "IPv6 webtunnel",
+			html: "webtunnel [2001:db8::1]:443 ABCD url=https://test.com",
 			expected: []struct {
 				addr string
 				port int
 				fp   string
-			}{{addr: "192.168.1.1", port: 443, fp: "ABCD"}},
+			}{{addr: "2001:db8::1", port: 443, fp: "ABCD"}},
 		},
 		{
 			name: "multiple bridges",
 			html: strings.Join([]string{
-				"Bridge webtunnel 192.168.1.1:443",
-				"Bridge webtunnel 10.0.0.1:8080 fingerprint EFGH",
-				"Bridge 172.16.0.1:9000 fingerprint 1234",
+				"webtunnel 192.168.1.1:443 ABCD url=https://test1.com",
+				"webtunnel 10.0.0.1:8080 EFGH url=https://test2.com",
+				"webtunnel [::1]:9000 1234 url=https://test3.com",
 			}, "\n"),
 			expected: []struct {
 				addr string
 				port int
 				fp   string
 			}{
-				{addr: "192.168.1.1", port: 443, fp: ""},
+				{addr: "192.168.1.1", port: 443, fp: "ABCD"},
 				{addr: "10.0.0.1", port: 8080, fp: "EFGH"},
-				{addr: "172.16.0.1", port: 9000, fp: "1234"},
+				{addr: "::1", port: 9000, fp: "1234"},
 			},
 		},
 	}

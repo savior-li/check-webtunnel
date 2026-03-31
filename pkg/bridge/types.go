@@ -15,6 +15,7 @@ type Bridge struct {
 	Address      string    `json:"address"`
 	Port         int       `json:"port"`
 	Fingerprint  string    `json:"fingerprint,omitempty"`
+	Extra        string    `json:"extra,omitempty"`
 	DiscoveredAt time.Time `json:"discovered_at"`
 	LastValidAt  time.Time `json:"last_validated_at,omitempty"`
 	IsAvailable  int       `json:"is_available"`
