@@ -13,6 +13,7 @@ import (
 	"tor-bridge-collector/pkg/database"
 	"tor-bridge-collector/pkg/exporter"
 	"tor-bridge-collector/pkg/i18n"
+	"tor-bridge-collector/pkg/logger"
 	"tor-bridge-collector/pkg/statistics"
 	"tor-bridge-collector/pkg/validator"
 )
@@ -38,6 +39,11 @@ func main() {
 				Aliases: []string{"l"},
 				Value:   "zh",
 				Usage:   "Language (en/zh)",
+			},
+			&cli.BoolFlag{
+				Name:    "debug",
+				Aliases: []string{"d"},
+				Usage:   "Enable debug mode",
 			},
 		},
 		Commands: []*cli.Command{
@@ -133,6 +139,12 @@ func getConfig(c *cli.Context) *configs.Config {
 			cfg = configs.DefaultConfig()
 		}
 	}
+
+	if c.Bool("debug") || cfg.App.Debug {
+		logger.SetDebug(true)
+		logger.Debug("Debug mode enabled")
+	}
+
 	return cfg
 }
 
@@ -154,29 +166,40 @@ func t(c *cli.Context, key string) string {
 func initAction(c *cli.Context) error {
 	cfg := getConfig(c)
 
+	logger.Debug("Starting init action")
+	logger.Debug("Config path: %s", c.String("config"))
+	logger.Debug("Database path: %s", cfg.Database.Path)
+
 	fmt.Println(t(c, "init_success"))
 
 	if err := os.MkdirAll("./", 0755); err != nil {
 		return fmt.Errorf("create dir failed: %w", err)
 	}
+	logger.Debug("Created directory structure")
 
 	configPath := c.String("config")
+	logger.Debug("Saving config to: %s", configPath)
 	if err := configs.Save(configPath, cfg); err != nil {
 		return fmt.Errorf("save config failed: %w", err)
 	}
+	logger.Debug("Config saved successfully")
 	fmt.Printf("  %s: %s\n", t(c, "config_created"), configPath)
 
+	logger.Debug("Creating database: %s", cfg.Database.Path)
 	db, err := database.New(cfg.Database.Path)
 	if err != nil {
 		return fmt.Errorf("create db failed: %w", err)
 	}
 	defer db.Close()
 
+	logger.Debug("Initializing database schema")
 	if err := db.InitSchema(); err != nil {
 		return fmt.Errorf("init schema failed: %w", err)
 	}
+	logger.Debug("Database schema initialized successfully")
 	fmt.Printf("  %s: %s\n", t(c, "db_created"), cfg.Database.Path)
 
+	logger.Info("Initialization completed")
 	return nil
 }
 
@@ -185,8 +208,13 @@ func fetchAction(c *cli.Context) error {
 	lang := getLang(c)
 	translator := i18n.NewTranslator(lang)
 
+	logger.Debug("Starting fetch action")
+	logger.Debug("Fetch URL: %s", cfg.Fetch.URL)
+	logger.Debug("Fetch timeout: %d seconds", cfg.Fetch.Timeout)
+
 	fmt.Println(translator.T("fetching"))
 
+	logger.Debug("Opening database: %s", cfg.Database.Path)
 	db, err := database.New(cfg.Database.Path)
 	if err != nil {
 		return fmt.Errorf("open db failed: %w", err)
@@ -204,29 +232,38 @@ func fetchAction(c *cli.Context) error {
 	}
 
 	if proxyStr != "" {
+		logger.Debug("Using proxy: %s", proxyStr)
 		if err := fetcher.SetProxy(proxyStr); err != nil {
 			return fmt.Errorf("set proxy failed: %w", err)
 		}
+	} else {
+		logger.Debug("No proxy configured, using direct connection")
 	}
 
+	logger.Debug("Fetching bridges from server...")
 	bridges, err := fetcher.Fetch()
 	if err != nil {
 		return fmt.Errorf("%s: %w", translator.T("fetch_failed"), err)
 	}
+	logger.Debug("Received %d bridges from server", len(bridges))
 
 	newCount := 0
 	for _, b := range bridges {
+		logger.Debug("Processing bridge: %s:%d (hash: %s)", b.Address, b.Port, b.Hash)
 		id, isNew, err := repo.Upsert(&b)
 		if err != nil {
-			log.Printf("Warning: upsert bridge failed: %v", err)
+			logger.Warn("Upsert bridge failed: %v", err)
 			continue
 		}
 		if isNew {
 			newCount++
-			_ = id
+			logger.Debug("New bridge inserted with ID: %d", id)
+		} else {
+			logger.Debug("Existing bridge updated, ID: %d", id)
 		}
 	}
 
+	logger.Debug("Fetch summary - Total: %d, New: %d", len(bridges), newCount)
 	fmt.Printf("%s: %d, %s: %d\n",
 		translator.T("bridges_found"), len(bridges),
 		translator.T("stats_total"), newCount)
@@ -240,8 +277,12 @@ func validateAction(c *cli.Context) error {
 	lang := getLang(c)
 	translator := i18n.NewTranslator(lang)
 
+	logger.Debug("Starting validate action")
+	logger.Debug("Database path: %s", cfg.Database.Path)
+
 	fmt.Println(translator.T("validating"))
 
+	logger.Debug("Opening database...")
 	db, err := database.New(cfg.Database.Path)
 	if err != nil {
 		return fmt.Errorf("open db failed: %w", err)
@@ -251,21 +292,27 @@ func validateAction(c *cli.Context) error {
 	repo := database.NewBridgeRepository(db)
 	historyRepo := database.NewHistoryRepository(db)
 
+	logger.Debug("Loading bridges from database...")
 	bridges, err := repo.GetAll()
 	if err != nil {
 		return fmt.Errorf("get bridges failed: %w", err)
 	}
+	logger.Debug("Found %d bridges to validate", len(bridges))
 
 	timeout := c.Int("timeout")
 	workers := c.Int("workers")
+	logger.Debug("Validation config - timeout: %ds, workers: %d", timeout, workers)
 	v := validator.NewValidator(timeout, workers)
 
 	available := 0
 	unavailable := 0
 
+	logger.Debug("Starting validation process...")
 	err = v.ValidateConcurrent(bridges, func(result *validator.ValidationResult) {
 		for i, b := range bridges {
 			if b.ID == result.BridgeID {
+				logger.Debug("Validating bridge %d (%s:%d) - result: available=%v, response_time=%dms",
+					b.ID, b.Address, b.Port, result.IsAvailable, result.ResponseTime)
 				repo.UpdateAvailability(b.ID, result.IsAvailable, result.ResponseTime)
 				historyRepo.InsertBridgeValidation(b.ID, &bridges[i], result)
 
@@ -283,6 +330,7 @@ func validateAction(c *cli.Context) error {
 		return fmt.Errorf("%s: %w", translator.T("validate_failed"), err)
 	}
 
+	logger.Debug("Validation completed - available: %d, unavailable: %d", available, unavailable)
 	fmt.Printf("%s: %d, %s: %d\n",
 		translator.T("bridge_available"), available,
 		translator.T("bridge_unavailable"), unavailable)
@@ -296,8 +344,11 @@ func exportAction(c *cli.Context) error {
 	lang := getLang(c)
 	translator := i18n.NewTranslator(lang)
 
+	logger.Debug("Starting export action")
+
 	fmt.Println(translator.T("exporting"))
 
+	logger.Debug("Opening database...")
 	db, err := database.New(cfg.Database.Path)
 	if err != nil {
 		return fmt.Errorf("open db failed: %w", err)
@@ -306,17 +357,21 @@ func exportAction(c *cli.Context) error {
 
 	repo := database.NewBridgeRepository(db)
 
+	logger.Debug("Loading bridges from database...")
 	bridges, err := repo.GetAll()
 	if err != nil {
 		return fmt.Errorf("get bridges failed: %w", err)
 	}
+	logger.Debug("Loaded %d bridges", len(bridges))
 
 	format := exporter.ExportFormat(c.String("format"))
 	outputDir := c.String("output")
 
+	logger.Debug("Exporting %d bridges to format '%s' in directory '%s'", len(bridges), format, outputDir)
 	if err := exporter.Export(bridges, format, outputDir); err != nil {
 		return fmt.Errorf("%s: %w", translator.T("export_failed"), err)
 	}
+	logger.Debug("Export completed successfully")
 
 	fmt.Printf("%s: %s\n", translator.T("export_file"), outputDir)
 	fmt.Println(translator.T("export_success"))
@@ -329,18 +384,25 @@ func statsAction(c *cli.Context) error {
 	lang := getLang(c)
 	translator := i18n.NewTranslator(lang)
 
+	logger.Debug("Starting stats action")
+
 	fmt.Println(translator.T("stats_title"))
 
+	logger.Debug("Opening database...")
 	db, err := database.New(cfg.Database.Path)
 	if err != nil {
 		return fmt.Errorf("open db failed: %w", err)
 	}
 	defer db.Close()
 
+	logger.Debug("Loading realtime statistics...")
 	stats, err := statistics.GetRealtimeStats(db)
 	if err != nil {
 		return fmt.Errorf("get stats failed: %w", err)
 	}
+
+	logger.Debug("Realtime stats - total: %d, available: %d, unavailable: %d, unknown: %d",
+		stats.TotalBridges, stats.AvailableBridges, stats.UnavailableBridges, stats.UnknownBridges)
 
 	fmt.Printf("  %s: %d\n", translator.T("stats_total"), stats.TotalBridges)
 	fmt.Printf("  %s: %d\n", translator.T("stats_available"), stats.AvailableBridges)
@@ -348,6 +410,7 @@ func statsAction(c *cli.Context) error {
 	fmt.Printf("  %s: %d\n", translator.T("stats_unknown"), stats.UnknownBridges)
 	fmt.Printf("  %s: %.2f ms\n", translator.T("stats_avg_time"), stats.AvgResponseTime)
 	if !stats.LastFetchTime.IsZero() {
+		logger.Debug("Last fetch time: %s", stats.LastFetchTime.Format(time.RFC3339))
 		fmt.Printf("  %s: %s\n", translator.T("stats_last_fetch"), stats.LastFetchTime.Format(time.RFC3339))
 	}
 
@@ -355,10 +418,12 @@ func statsAction(c *cli.Context) error {
 	limit := 7
 
 	if period != "day" {
+		logger.Debug("Loading historical stats for period: %s", period)
 		historical, err := statistics.GetStatsByPeriod(db, period, limit)
 		if err != nil {
-			log.Printf("Warning: get historical stats failed: %v", err)
+			logger.Warn("Get historical stats failed: %v", err)
 		} else {
+			logger.Debug("Found %d historical records", len(historical))
 			fmt.Printf("\n--- %s ---\n", translator.T("stats_title"))
 			for _, s := range historical {
 				fmt.Printf("  %s: total=%d available=%d avg=%.2fms\n",

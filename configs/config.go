@@ -47,6 +47,7 @@ type ExportConfig struct {
 type AppConfig struct {
 	Lang     string `yaml:"lang"`
 	LogLevel string `yaml:"log_level"`
+	Debug    bool   `yaml:"debug"`
 }
 
 func DefaultConfig() *Config {
