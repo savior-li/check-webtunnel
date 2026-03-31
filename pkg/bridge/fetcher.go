@@ -59,7 +59,9 @@ func (f *Fetcher) SetProxy(proxyURL string) error {
 	}
 
 	f.client.Transport = &http.Transport{
-		Proxy: http.ProxyURL(proxyURLObj),
+		Proxy:               http.ProxyURL(proxyURLObj),
+		IdleConnTimeout:     30 * time.Second,
+		TLSHandshakeTimeout: 30 * time.Second,
 	}
 
 	return nil
@@ -86,14 +88,17 @@ func (f *Fetcher) setSocks5Proxy(proxyURL string) error {
 	}
 
 	dialer, err := proxy.SOCKS5("tcp", parsedURL.Host, auth, &net.Dialer{
-		Timeout: f.timeout,
+		Timeout:  f.timeout,
+		Deadline: time.Now().Add(f.timeout),
 	})
 	if err != nil {
 		return fmt.Errorf("create SOCKS5 dialer failed: %w", err)
 	}
 
 	f.client.Transport = &http.Transport{
-		Dial: dialer.Dial,
+		Dial:                dialer.Dial,
+		IdleConnTimeout:     30 * time.Second,
+		TLSHandshakeTimeout: 30 * time.Second,
 	}
 
 	return nil
