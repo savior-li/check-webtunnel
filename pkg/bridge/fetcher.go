@@ -3,10 +3,14 @@ package bridge
 import (
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
+
+	"golang.org/x/net/proxy"
 )
 
 type Fetcher struct {
@@ -31,20 +35,67 @@ func (f *Fetcher) SetProxy(proxyURL string) error {
 		return nil
 	}
 
-	transport := &http.Transport{
-		Proxy: http.ProxyURL(nil),
-	}
-
 	proxyURL = strings.TrimPrefix(proxyURL, "http://")
 	proxyURL = strings.TrimPrefix(proxyURL, "https://")
-	proxyURL = strings.TrimPrefix(proxyURL, "socks5://")
+	socks5Prefix := strings.TrimPrefix(proxyURL, "socks5://")
+
+	isSocks5 := socks5Prefix != proxyURL
+	proxyURL = socks5Prefix
 
 	if !strings.Contains(proxyURL, "://") {
-		proxyURL = "http://" + proxyURL
+		if isSocks5 {
+			proxyURL = "socks5://" + proxyURL
+		} else {
+			proxyURL = "http://" + proxyURL
+		}
 	}
 
-	transport.Proxy = nil
-	f.client.Transport = transport
+	if isSocks5 {
+		return f.setSocks5Proxy(proxyURL)
+	}
+
+	proxyURLObj, err := url.Parse(proxyURL)
+	if err != nil {
+		return fmt.Errorf("invalid proxy URL: %w", err)
+	}
+
+	f.client.Transport = &http.Transport{
+		Proxy: http.ProxyURL(proxyURLObj),
+	}
+
+	return nil
+}
+
+func (f *Fetcher) setSocks5Proxy(proxyURL string) error {
+	parsedURL, err := url.Parse(proxyURL)
+	if err != nil {
+		return fmt.Errorf("invalid socks5 proxy URL: %w", err)
+	}
+
+	var auth *proxy.Auth
+	if parsedURL.User != nil {
+		if p, ok := parsedURL.User.Password(); ok {
+			auth = &proxy.Auth{
+				User:     parsedURL.User.Username(),
+				Password: p,
+			}
+		} else {
+			auth = &proxy.Auth{
+				User: parsedURL.User.Username(),
+			}
+		}
+	}
+
+	dialer, err := proxy.SOCKS5("tcp", parsedURL.Host, auth, &net.Dialer{
+		Timeout: f.timeout,
+	})
+	if err != nil {
+		return fmt.Errorf("create SOCKS5 dialer failed: %w", err)
+	}
+
+	f.client.Transport = &http.Transport{
+		Dial: dialer.Dial,
+	}
 
 	return nil
 }
