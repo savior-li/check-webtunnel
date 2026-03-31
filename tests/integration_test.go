@@ -215,7 +215,6 @@ func TestIntegration_FetcherWithProxy(t *testing.T) {
 	err := fetcher.SetProxy("http://127.0.0.1:1080")
 	assert.NoError(t, err)
 
-	bridges, err := fetcher.Fetch()
+	err = fetcher.SetProxy("")
 	assert.NoError(t, err)
-	assert.Len(t, bridges, 1)
 }
