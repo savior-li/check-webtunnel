@@ -89,6 +89,27 @@ go mod download
 ./tor-bridge-collector stats --period week
 ```
 
+## Debug 模式
+
+启用 debug 模式可以查看详细的执行步骤日志：
+
+```bash
+./tor-bridge-collector -d fetch
+./tor-bridge-collector -d fetch --proxy socks5://127.0.0.1:1080
+./tor-bridge-collector -d validate --timeout 5
+./tor-bridge-collector -d stats
+```
+
+Debug 输出示例：
+```
+[DEBUG] [14:57:53] Starting fetch action
+[DEBUG] [14:57:53] Fetch URL: https://bridges.torproject.org/bridges?transport=webtunnel
+[DEBUG] [14:57:53] Using proxy: socks5://127.0.0.1:1080
+[DEBUG] [14:57:55] Received 2 bridges from server
+[DEBUG] [14:57:55] Processing bridge: 192.168.1.1:443
+[DEBUG] [14:57:55] New bridge inserted with ID: 1
+```
+
 ## 命令行选项
 
 ### 全局选项
@@ -97,6 +118,7 @@ go mod download
 |------|------|--------|
 | `--config, -c` | 配置文件路径 | config.yaml |
 | `--lang, -l` | 语言 (en/zh) | zh |
+| `--debug, -d` | 启用 debug 模式 | false |
 
 ### 子命令
 
@@ -166,6 +188,7 @@ export:
 app:
   lang: "zh"
   log_level: "info"
+  debug: false
 ```
 
 ## 数据库 Schema
