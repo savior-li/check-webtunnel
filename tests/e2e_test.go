@@ -5,7 +5,6 @@ package tests
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -59,7 +58,7 @@ func TestE2E_InitWithCustomConfig(t *testing.T) {
 
 	cmd := exec.Command(binPath, "init", "--config", customConfig)
 	cmd.Dir = tempDir
-	output, err := cmd.CombinedOutput()
+	_, err := cmd.CombinedOutput()
 
 	assert.NoError(t, err)
 	assert.FileExists(t, customConfig)
@@ -135,7 +134,7 @@ func TestE2E_ExportCommand(t *testing.T) {
 	outputDir := filepath.Join(tempDir, "output")
 	cmd := exec.Command(binPath, "export", "--output", outputDir)
 	cmd.Dir = tempDir
-	output, err := cmd.CombinedOutput()
+	_, err = cmd.CombinedOutput()
 
 	assert.NoError(t, err)
 	assert.DirExists(t, outputDir)
