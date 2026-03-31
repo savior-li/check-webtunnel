@@ -155,7 +155,6 @@ func initAction(c *cli.Context) error {
 	cfg := getConfig(c)
 
 	fmt.Println(t(c, "init_success"))
-	fmt.Printf("  %s: %s\n", t(c, "config_created"), cfg.Database.Path)
 
 	if err := os.MkdirAll("./", 0755); err != nil {
 		return fmt.Errorf("create dir failed: %w", err)
